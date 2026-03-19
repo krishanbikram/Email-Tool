@@ -1,17 +1,18 @@
-import { Redis } from 'ioredis';
+import IORedis from 'ioredis';
 
 const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
 
-export const redis = new Redis(redisUrl, {
+// Use a single shared ioredis instance — avoids bullmq/ioredis version conflicts
+export const redis = new IORedis(redisUrl, {
   maxRetriesPerRequest: null,
   enableReadyCheck: false,
 });
 
 export const redisConnection = {
-  connection: new Redis(redisUrl, {
+  connection: new IORedis(redisUrl, {
     maxRetriesPerRequest: null,
     enableReadyCheck: false,
-  }),
+  }) as any,
 };
 
 redis.on('error', (err) => {
