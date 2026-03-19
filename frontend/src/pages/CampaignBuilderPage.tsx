@@ -6,8 +6,8 @@ import { Save, Send, Monitor, Smartphone, ArrowLeft, AlertCircle } from 'lucide-
 import api from '../lib/api'
 
 // Dynamic import of Quill to handle SSR/module issues
-let ReactQuill: any = null
-try { ReactQuill = require('react-quill') } catch {}
+// @ts-ignore
+import ReactQuill from 'react-quill'
 
 const quillModules = {
   toolbar: [
