@@ -1,0 +1,222 @@
+// This is your Prisma schema file
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  MANAGER
+  VIEWER
+}
+
+enum ContactStatus {
+  ACTIVE
+  BOUNCED
+  UNSUBSCRIBED
+  SPAM_COMPLAINT
+}
+
+enum CampaignStatus {
+  DRAFT
+  SCHEDULED
+  SENDING
+  SENT
+  PAUSED
+  FAILED
+}
+
+enum BounceType {
+  HARD
+  SOFT
+}
+
+enum TrackingEventType {
+  OPEN
+  CLICK
+}
+
+enum EmailLogStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  OPENED
+  CLICKED
+  BOUNCED
+  FAILED
+  UNSUBSCRIBED
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(MANAGER)
+  name         String?
+  apiKeys      ApiKey[]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("users")
+}
+
+model ApiKey {
+  id        String    @id @default(uuid())
+  keyHash   String    @unique
+  prefix    String    // first 8 chars for display
+  label     String?
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastUsed  DateTime?
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@map("api_keys")
+}
+
+model Domain {
+  id                  String       @id @default(uuid())
+  domain              String       @unique
+  smtpHost            String
+  smtpPort            Int          @default(587)
+  smtpUser            String
+  smtpPassEncrypted   String
+  encryption          String       @default("TLS") // TLS | SSL | NONE
+  fromName            String       @default("No Reply")
+  fromEmail           String
+  isActive            Boolean      @default(true)
+  // Warmup
+  warmupEnabled       Boolean      @default(false)
+  warmupStartDate     DateTime?
+  dailyLimitOverride  Int?         // manual override
+  // Tracking
+  totalSent           Int          @default(0)
+  reputationNotes     String?
+  campaigns           Campaign[]
+  emailLogs           EmailLog[]
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  @@map("domains")
+}
+
+model ContactList {
+  id        String    @id @default(uuid())
+  name      String
+  campaigns Campaign[]
+  contacts  Contact[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@map("contact_lists")
+}
+
+model Contact {
+  id          String        @id @default(uuid())
+  email       String
+  firstName   String?
+  lastName    String?
+  company     String?
+  tags        String[]
+  status      ContactStatus @default(ACTIVE)
+  listId      String
+  list        ContactList   @relation(fields: [listId], references: [id], onDelete: Cascade)
+  emailLogs   EmailLog[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@unique([email, listId])
+  @@map("contacts")
+}
+
+model Campaign {
+  id              String          @id @default(uuid())
+  name            String
+  subject         String
+  subjectB        String?         // A/B test variant
+  abSplitPercent  Int?            // % getting variant B
+  htmlBody        String
+  textBody        String?
+  listId          String
+  list            ContactList     @relation(fields: [listId], references: [id])
+  domainId        String
+  domain          Domain          @relation(fields: [domainId], references: [id])
+  status          CampaignStatus  @default(DRAFT)
+  scheduledAt     DateTime?
+  timezone        String?         @default("UTC")
+  trackOpens      Boolean         @default(true)
+  trackClicks     Boolean         @default(true)
+  sendRatePerHour Int             @default(100)
+  statsJson       Json?
+  emailLogs       EmailLog[]
+  bounces         Bounce[]
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@map("campaigns")
+}
+
+model EmailLog {
+  id             String         @id @default(uuid())
+  campaignId     String
+  campaign       Campaign       @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  contactId      String
+  contact        Contact        @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  domainId       String
+  domain         Domain         @relation(fields: [domainId], references: [id])
+  status         EmailLogStatus @default(QUEUED)
+  smtpCode       Int?
+  errorMessage   String?
+  messageId      String?
+  subjectUsed    String?        // which variant was sent
+  sentAt         DateTime?
+  deliveredAt    DateTime?
+  openedAt       DateTime?
+  clickedAt      DateTime?
+  trackingEvents TrackingEvent[]
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@map("email_logs")
+}
+
+model TrackingEvent {
+  id         String            @id @default(uuid())
+  emailLogId String
+  emailLog   EmailLog          @relation(fields: [emailLogId], references: [id], onDelete: Cascade)
+  type       TrackingEventType
+  url        String?           // for clicks
+  ip         String?
+  userAgent  String?
+  createdAt  DateTime          @default(now())
+
+  @@map("tracking_events")
+}
+
+model Bounce {
+  id         String     @id @default(uuid())
+  email      String
+  type       BounceType
+  campaignId String?
+  campaign   Campaign?  @relation(fields: [campaignId], references: [id])
+  rawResponse String?
+  timestamp  DateTime   @default(now())
+
+  @@map("bounces")
+}
+
+model Setting {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("settings")
+}
